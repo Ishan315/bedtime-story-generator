@@ -6,7 +6,15 @@ from main import BedtimeStoryAgent, StoryOrchestrator, FALLBACK_STORIES
 class TestBedtimeStorySystem(unittest.TestCase):
     def setUp(self):
         self.mock_agent = MagicMock(spec=BedtimeStoryAgent)
-        self.orchestrator = StoryOrchestrator(self.mock_agent)
+        with patch("builtins.open", MagicMock()):
+            self.orchestrator = StoryOrchestrator(self.mock_agent, prompt_version="v1")
+        # Separate mocks for different prompts to match expected format keys
+        self.orchestrator._load_prompt = MagicMock()
+        self.orchestrator._load_prompt.side_effect = lambda f: {
+            "categorizer.md": "Categorize {user_input}",
+            "storyteller.md": "{category} {feedback_block} {user_input}",
+            "judge.md": "{story}"
+        }.get(f, "")
 
     def test_judge_robust_json_parsing(self):
         """Test that the judge can extract JSON even with surrounding text."""

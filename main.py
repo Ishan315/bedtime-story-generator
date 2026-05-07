@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import time
 from typing import List, Dict, Optional, Tuple
 from openai import OpenAI, RateLimitError, APIError
 from dotenv import load_dotenv
@@ -33,6 +34,24 @@ FALLBACK_STORIES = [
     }
 ]
 
+class PromptPerformanceTracker:
+    """Simple local tracker for prompt effectiveness and A/B testing metrics."""
+    def __init__(self, log_file: str = "prompt_metrics.jsonl"):
+        self.log_file = log_file
+
+    def log_run(self, prompt_version: str, category: str, attempts: int, final_score: int, success: bool, latency: float):
+        entry = {
+            "timestamp": time.time(),
+            "prompt_version": prompt_version,
+            "category": category,
+            "attempts": attempts,
+            "final_score": final_score,
+            "success": success,
+            "latency_seconds": round(latency, 2)
+        }
+        with open(self.log_file, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+
 class BedtimeStoryAgent:
     def __init__(self, model: str = "gpt-3.5-turbo"):
         api_key = os.getenv("OPENAI_API_KEY")
@@ -63,12 +82,18 @@ class BedtimeStoryAgent:
             return f"ERROR_GENERAL: {str(e)}"
 
 class StoryOrchestrator:
-    def __init__(self, agent: BedtimeStoryAgent):
+    def __init__(self, agent: BedtimeStoryAgent, prompt_version: str = "v1"):
         self.agent = agent
         self.prompt_dir = "prompts"
+        self.prompt_version = prompt_version
+        self.tracker = PromptPerformanceTracker()
 
     def _load_prompt(self, filename: str) -> str:
-        path = os.path.join(self.prompt_dir, filename)
+        # Check if a versioned prompt exists, otherwise fallback to the root prompt dir
+        path = os.path.join(self.prompt_dir, self.prompt_version, filename)
+        if not os.path.exists(path):
+            path = os.path.join(self.prompt_dir, filename)
+        
         with open(path, 'r') as f:
             return f.read()
 
@@ -137,14 +162,19 @@ class StoryOrchestrator:
         return story_text, story_data['category']
 
     def tell_story(self, user_input: str, max_retries: int = 1):
+        start_time = time.time()
         print(f"\n[Orchestrator] Categorizing request...")
         category = self.categorize_request(user_input)
         print(f"[Orchestrator] Category: {category}")
         
         current_feedback = None
         last_decent_story = ""
+        final_score = 0
+        success = False
+        attempts = 0
         
         for i in range(max_retries + 1):
+            attempts += 1
             attempt_str = f"Attempt {i+1}"
             print(f"\n[Orchestrator] {attempt_str}: Generating story...")
             story = self.generate_story(user_input, category, current_feedback)
@@ -158,17 +188,24 @@ class StoryOrchestrator:
 
             print(f"[Orchestrator] {attempt_str}: Judging story...")
             score, feedback, is_pass = self.judge_story(story)
+            final_score = score
             print(f"[Judge] Score: {score}/10")
             print(f"[Judge] Feedback: {feedback}")
             
             if is_pass:
                 print(f"[Orchestrator] Judge passed the story!")
+                success = True
+                latency = time.time() - start_time
+                self.tracker.log_run(self.prompt_version, category, attempts, final_score, success, latency)
                 return story, category
             else:
                 print(f"[Orchestrator] Judge requested improvements.")
                 current_feedback = feedback
                 last_decent_story = story
         
+        latency = time.time() - start_time
+        self.tracker.log_run(self.prompt_version, category, attempts, final_score, success, latency)
+
         # If we exhausted retries and still didn't pass, but have a story
         if last_decent_story:
             print("[Orchestrator] Could not get a perfect score, but returning the best draft.")
@@ -180,7 +217,9 @@ class StoryOrchestrator:
 
 def main():
     agent = BedtimeStoryAgent()
-    orchestrator = StoryOrchestrator(agent)
+    # You can change the prompt_version here to test A/B versions
+    # e.g., StoryOrchestrator(agent, prompt_version="v2")
+    orchestrator = StoryOrchestrator(agent, prompt_version="v1")
     
     print("=== Welcome to the Bedtime Story Agent ===")
     user_input = input("What kind of story do you want to hear? ")
@@ -196,6 +235,8 @@ def main():
     print("="*50 + "\n")
     print(story)
     print("\n" + "="*50)
+    print("\n[Analytics] Performance metrics logged to prompt_metrics.jsonl")
+    print("[Analytics] Run 'python view_stats.py' to see aggregated results.")
 
 if __name__ == "__main__":
     main()
