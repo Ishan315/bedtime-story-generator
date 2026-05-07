@@ -1,0 +1,1 @@
+Categorize this bedtime story request into one of these: Fable, Adventure, Mystery, Sci-Fi, or General. Return ONLY the category name.

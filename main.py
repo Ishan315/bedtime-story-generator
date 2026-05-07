@@ -65,11 +65,17 @@ class BedtimeStoryAgent:
 class StoryOrchestrator:
     def __init__(self, agent: BedtimeStoryAgent):
         self.agent = agent
+        self.prompt_dir = "prompts"
+
+    def _load_prompt(self, filename: str) -> str:
+        path = os.path.join(self.prompt_dir, filename)
+        with open(path, 'r') as f:
+            return f.read()
 
     def categorize_request(self, user_input: str) -> str:
+        prompt_template = self._load_prompt("categorizer.md")
         messages = [
-            {"role": "system", "content": "Categorize this bedtime story request into one of these: Fable, Adventure, Mystery, Sci-Fi, or General. Return ONLY the category name."},
-            {"role": "user", "content": user_input}
+            {"role": "user", "content": prompt_template + f"\n\nRequest: {user_input}"}
         ]
         resp = self.agent.call_model(messages, max_tokens=10, temperature=0).strip()
         if "ERROR" in resp:
@@ -77,18 +83,20 @@ class StoryOrchestrator:
         return resp if resp in ["Fable", "Adventure", "Mystery", "Sci-Fi", "General"] else "General"
 
     def generate_story(self, user_input: str, category: str, feedback: Optional[str] = None) -> str:
-        system_prompt = f"""You are a master bedtime story teller for children aged 5-10. 
-Create a {category} story based on the user's request. 
-Follow a classic story arc: Inciting Incident, Rising Action, Climax, and Resolution. 
-Keep the tone warm and engaging. Ensure the vocabulary and themes are appropriate for children aged 5-10."""
+        prompt_template = self._load_prompt("storyteller.md")
         
-        user_prompt = f"Request: {user_input}"
+        feedback_block = ""
         if feedback:
-            user_prompt += f"\n\nPrevious draft feedback: {feedback}\nPlease refine the story based on this feedback."
+            feedback_block = f"Previous draft feedback: {feedback}\nPlease refine the story based on this feedback."
+        
+        full_prompt = prompt_template.format(
+            category=category,
+            feedback_block=feedback_block,
+            user_input=user_input
+        )
 
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": full_prompt}
         ]
         return self.agent.call_model(messages, temperature=0.8)
 
@@ -96,19 +104,11 @@ Keep the tone warm and engaging. Ensure the vocabulary and themes are appropriat
         if "ERROR" in story:
             return 0, "No story to judge due to API error.", False
 
-        system_prompt = """You are a critical editor for children's literature. Evaluate the following story for a 5-10 year old audience.
-Criteria:
-1. Age-appropriateness (language and themes).
-2. Narrative arc quality (clear beginning, middle, and end).
-3. Engagement level.
-4. Positive message or moral.
-
-Provide a score (1-10), specific feedback, and a decision (PASS/FAIL). PASS if score is 8 or higher.
-Format your response as a JSON object: {"score": int, "feedback": "string", "decision": "PASS/FAIL"}"""
+        prompt_template = self._load_prompt("judge.md")
+        full_prompt = prompt_template.format(story=story)
 
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Story to evaluate:\n\n{story}"}
+            {"role": "user", "content": full_prompt}
         ]
         
         eval_resp = self.agent.call_model(messages, temperature=0.2)
