@@ -84,8 +84,9 @@ class BedtimeStoryAgent:
             return f"ERROR_GENERAL: {str(e)}"
 
 class StoryOrchestrator:
-    def __init__(self, agent: BedtimeStoryAgent, prompt_version: str = "v1"):
-        self.agent = agent
+    def __init__(self, story_agent: BedtimeStoryAgent, judge_agent: BedtimeStoryAgent, prompt_version: str = "v1"):
+        self.story_agent = story_agent
+        self.judge_agent = judge_agent
         self.prompt_dir = "prompts"
         self.prompt_version = prompt_version
         self.tracker = PromptPerformanceTracker()
@@ -104,7 +105,7 @@ class StoryOrchestrator:
         messages = [
             {"role": "user", "content": prompt_template + f"\n\nRequest: {user_input}"}
         ]
-        resp = self.agent.call_model(messages, max_tokens=10, temperature=0).strip()
+        resp = self.story_agent.call_model(messages, max_tokens=10, temperature=0).strip()
         if "ERROR" in resp:
             return "General"
         return resp if resp in ["Fable", "Adventure", "Mystery", "Sci-Fi", "General"] else "General"
@@ -125,7 +126,7 @@ class StoryOrchestrator:
         messages = [
             {"role": "user", "content": full_prompt}
         ]
-        return self.agent.call_model(messages, temperature=0.8)
+        return self.story_agent.call_model(messages, temperature=0.8)
 
     def judge_story(self, story: str) -> Tuple[int, str, bool]:
         if "ERROR" in story:
@@ -138,7 +139,7 @@ class StoryOrchestrator:
             {"role": "user", "content": full_prompt}
         ]
         
-        eval_resp = self.agent.call_model(messages, temperature=0.2)
+        eval_resp = self.judge_agent.call_model(messages, temperature=0.2)
         if "ERROR" in eval_resp:
             return 5, f"Judge encountered an API error: {eval_resp}", False
 
@@ -218,10 +219,12 @@ class StoryOrchestrator:
         return self.get_fallback_story()
 
 def main():
-    agent = BedtimeStoryAgent()
+    # Best practice: use a smaller, faster model for generation and a larger, smarter model for judging.
+    story_agent = BedtimeStoryAgent(model="gpt-3.5-turbo")
+    judge_agent = BedtimeStoryAgent(model="gpt-4o")
+    
     # You can change the prompt_version here to test A/B versions
-    # e.g., StoryOrchestrator(agent, prompt_version="v2")
-    orchestrator = StoryOrchestrator(agent, prompt_version="v1")
+    orchestrator = StoryOrchestrator(story_agent=story_agent, judge_agent=judge_agent, prompt_version="v1")
     
     print("=== Welcome to the Bedtime Story Agent ===")
     user_input = input("What kind of story do you want to hear? ")

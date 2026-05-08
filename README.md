@@ -5,9 +5,9 @@ A robust, multi-agent system designed to generate high-quality, age-appropriate 
 ## 🚀 Key Features
 
 - **Multi-Agent Orchestration**: 
-  - **Categorizer**: Identifies the genre (Fable, Adventure, Mystery, etc.) to tailor the story's tone.
-  - **Storyteller**: Drafts engaging narratives using classic story arcs.
-  - **Judge**: Critically evaluates stories for age-appropriateness and engagement, providing feedback for refinement.
+  - **Categorizer**: Identifies the genre (Fable, Adventure, Mystery, etc.) to tailor the story's tone (Runs on GPT-3.5-Turbo).
+  - **Storyteller**: Drafts engaging narratives using classic story arcs (Runs on GPT-3.5-Turbo).
+  - **Judge**: Critically evaluates stories for age-appropriateness and engagement, providing feedback for refinement. **Runs on GPT-4o** (Best Practice: using a stronger model for judging prevents self-bias and ensures objective evaluation).
 - **Self-Refinement Loop**: The system automatically revises stories based on Judge feedback if the initial quality score is low.
 - **High Resilience**:
   - **API Error Handling**: Gracefully manages rate limits and quota issues.

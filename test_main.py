@@ -5,9 +5,14 @@ from main import BedtimeStoryAgent, StoryOrchestrator, FALLBACK_STORIES
 
 class TestBedtimeStorySystem(unittest.TestCase):
     def setUp(self):
-        self.mock_agent = MagicMock(spec=BedtimeStoryAgent)
+        self.mock_story_agent = MagicMock(spec=BedtimeStoryAgent)
+        self.mock_judge_agent = MagicMock(spec=BedtimeStoryAgent)
         with patch("builtins.open", MagicMock()):
-            self.orchestrator = StoryOrchestrator(self.mock_agent, prompt_version="v1")
+            self.orchestrator = StoryOrchestrator(
+                story_agent=self.mock_story_agent, 
+                judge_agent=self.mock_judge_agent, 
+                prompt_version="v1"
+            )
         # Separate mocks for different prompts to match expected format keys
         self.orchestrator._load_prompt = MagicMock()
         self.orchestrator._load_prompt.side_effect = lambda f: {
@@ -19,7 +24,7 @@ class TestBedtimeStorySystem(unittest.TestCase):
     def test_judge_robust_json_parsing(self):
         """Test that the judge can extract JSON even with surrounding text."""
         messy_response = "Certainly! Here is the evaluation: {\"score\": 9, \"feedback\": \"Great story!\", \"decision\": \"PASS\"} I hope this helps!"
-        self.mock_agent.call_model.return_value = messy_response
+        self.mock_judge_agent.call_model.return_value = messy_response
         
         score, feedback, is_pass = self.orchestrator.judge_story("Some story")
         
@@ -30,7 +35,7 @@ class TestBedtimeStorySystem(unittest.TestCase):
     def test_fallback_on_quota_error(self):
         """Test that the orchestrator returns a fallback story if the API returns a quota error."""
         # Categorize succeeds, but generate_story returns a quota error
-        self.mock_agent.call_model.side_effect = ["Adventure", "ERROR_QUOTA"]
+        self.mock_story_agent.call_model.side_effect = ["Adventure", "ERROR_QUOTA"]
         
         story, category = self.orchestrator.tell_story("A space adventure")
         
@@ -46,10 +51,10 @@ class TestBedtimeStorySystem(unittest.TestCase):
         # 3. Judge 1: Score 5, FAIL
         # 4. Attempt 2: Story B
         # 5. Judge 2: Score 6, FAIL
-        self.mock_agent.call_model.side_effect = [
-            "General", 
-            "Story A", json.dumps({"score": 5, "feedback": "Bad", "decision": "FAIL"}),
-            "Story B", json.dumps({"score": 6, "feedback": "Better", "decision": "FAIL"})
+        self.mock_story_agent.call_model.side_effect = ["General", "Story A", "Story B"]
+        self.mock_judge_agent.call_model.side_effect = [
+            json.dumps({"score": 5, "feedback": "Bad", "decision": "FAIL"}),
+            json.dumps({"score": 6, "feedback": "Better", "decision": "FAIL"})
         ]
         
         story, category = self.orchestrator.tell_story("A story", max_retries=1)
@@ -59,7 +64,7 @@ class TestBedtimeStorySystem(unittest.TestCase):
 
     def test_categorize_failure_defaults_to_general(self):
         """Test that categorization failure defaults to 'General'."""
-        self.mock_agent.call_model.return_value = "ERROR_API"
+        self.mock_story_agent.call_model.return_value = "ERROR_API"
         category = self.orchestrator.categorize_request("Anything")
         self.assertEqual(category, "General")
 
