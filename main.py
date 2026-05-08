@@ -18,6 +18,8 @@ If I had more time, I would:
 3. Enhance the Judge to be more specialized (e.g., a 'Vocabulary Judge' and a 'Safety Judge').
 4. Implement a better UI (perhaps a simple Streamlit or Gradio app) to display the block diagram and the story progress.
 5. Add a local small LLM (like Llama-3-8B) as a secondary fallback if the cloud API is unavailable.
+6. Make an app that allows parents to customize the story parameters (e.g., moral lessons, character names, settings) and see the impact on the generated story in real-time.
+7. Visualization of the A/B testing results and prompt performance metrics in a dashboard format, showing trends over time and across different categories.
 """
 
 # Fallback "Canned Stories" for when the API is down or failing
